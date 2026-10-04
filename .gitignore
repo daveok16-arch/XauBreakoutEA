@@ -2,3 +2,4 @@ research/data/
 research/reports/
 __pycache__/
 *.pyc
+research/signals_scan_cache/

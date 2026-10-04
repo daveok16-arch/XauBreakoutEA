@@ -9,7 +9,9 @@ MetaTrader. Uses COMEX gold futures (`GC=F`) as an XAUUSD proxy.
 | `strategy.py` | indicators + bar-by-bar backtest engine + metrics |
 | `walkforward.py` | out-of-sample validation (the result that matters) |
 | `robustness.py` | parameter sensitivity, cost stress, bootstrap Monte Carlo |
-| `FINDINGS.md` | written conclusions |
+| `signals_scan.py` | scan MQL5 Signals, recompute DD/CAGR, flag traps |
+| `SIGNALS.md` | signals analysis findings |
+| `FINDINGS.md` | backtest conclusions |
 | `data/`, `reports/` | generated output, not source |
 
 ```
