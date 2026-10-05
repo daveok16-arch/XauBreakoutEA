@@ -59,6 +59,7 @@ class Params:
     max_total_risk_pct: float = 3.00
     max_daily_loss_pct: float = 2.00
     max_positions: int = 1
+    allow_short: bool = True    # long-only when False (the proven side)
     # management
     use_trailing: bool = True
     trail_atr: float = 2.00
@@ -228,8 +229,13 @@ def backtest(df: pd.DataFrame, p: Params):
             else:
                 long_sig = close[i - 1] > hh[i - 1]
                 short_sig = close[i - 1] < ll[i - 1]
-                if long_sig or short_sig:
-                    side = "long" if long_sig else "short"
+                if p.allow_short and short_sig:
+                    side = "short"
+                elif long_sig:
+                    side = "long"
+                else:
+                    side = None
+                if side is not None:
                     a = atr[i - 1]
                     stop_dist = p.stop_atr * a
                     entry = openp[i] + (half_spread if side == "long" else -half_spread)
