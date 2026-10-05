@@ -11,6 +11,8 @@ MetaTrader. Uses COMEX gold futures (`GC=F`) as an XAUUSD proxy.
 | `robustness.py` | parameter sensitivity, cost stress, bootstrap Monte Carlo |
 | `signals_scan.py` | scan MQL5 Signals, recompute DD/CAGR, flag traps |
 | `SIGNALS.md` | signals analysis findings |
+| `trailing_tp_ab.py` | controlled A/B: fixed TP vs trailing TP |
+| `TRAILING_TP.md` | trailing-TP findings (negative result) |
 | `gold_reaper_analysis.py` | reverse-engineer Gold Reaper sizing from its curve |
 | `FINDINGS.md` | backtest conclusions |
 | `data/`, `reports/` | generated output, not source |

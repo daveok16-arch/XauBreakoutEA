@@ -11,6 +11,18 @@ MQL5 logic bar-for-bar on OHLC data:
     with the adverse side checked first (conservative when both could trigger)
   - position size is derived from the actual stop distance (percent risk)
 
+Trailing take-profit (opt-in, `use_trailing_tp`):
+  - activates once the favourable excursion reaches `trail_tp_start_r` x R,
+    where R is the initial stop distance
+  - on activation the fixed TP is *disabled* and a profit-side trailing level is
+    set at `extreme - trail_tp_atr` x ATR (long) / `extreme + trail_tp_atr` x ATR
+    (short)
+  - the level only ever ratchets toward profit; the trade exits when price
+    retraces to it (reason "trail_tp")
+  - the stop loss and the trailing stop loss remain active underneath
+  - it changes exits only: no grid, no martingale, no position sizing change, no
+    re-entry, no adding to positions
+
 Data granularity limits fidelity: intra-bar path is unknown, so this
 over-estimates nothing and under-estimates some gaps. Treat it as a
 plausibility filter, not a promise.
@@ -51,6 +63,10 @@ class Params:
     use_trailing: bool = True
     trail_atr: float = 2.00
     trail_start_r: float = 1.00
+    # trailing take-profit (opt-in; exits only, no sizing change)
+    use_trailing_tp: bool = False
+    trail_tp_start_r: float = 1.00    # activate once favourable excursion >= this x R
+    trail_tp_atr: float = 1.00        # trail distance behind the extreme, in ATR
     # costs (price units per ounce of gold)
     spread: float = 0.30        # full bid/ask spread
     commission_per_side: float = 0.07
@@ -155,27 +171,43 @@ def backtest(df: pd.DataFrame, p: Params):
                 # adverse first: stop
                 if low[i] <= pos["sl"]:
                     close_pos(i, pos["sl"], "stop")
-                elif high[i] >= pos["tp"]:
+                # profit side: fixed TP unless the trailing TP has taken over
+                elif pos["tp_on"] and high[i] >= pos["tp"]:
                     close_pos(i, pos["tp"], "target")
                 else:
                     pos["hw"] = max(pos["hw"], high[i])
-                    if p.use_trailing:
-                        stop_dist = pos["entry"] - pos["init_sl"]
-                        if pos["hw"] - pos["entry"] >= p.trail_start_r * stop_dist:
-                            new_sl = pos["hw"] - p.trail_atr * pos["atr"]
-                            pos["sl"] = max(pos["sl"], new_sl)
+                    stop_dist = pos["entry"] - pos["init_sl"]
+                    if p.use_trailing and pos["hw"] - pos["entry"] >= p.trail_start_r * stop_dist:
+                        pos["sl"] = max(pos["sl"], pos["hw"] - p.trail_atr * pos["atr"])
+                    if p.use_trailing_tp:
+                        if not pos["ttp_on"] and pos["hw"] - pos["entry"] >= p.trail_tp_start_r * stop_dist:
+                            # activate: disable the fixed TP and start trailing profit
+                            pos["ttp_on"] = True
+                            pos["tp_on"] = False
+                            pos["ttp"] = pos["hw"] - p.trail_tp_atr * pos["atr"]
+                        if pos["ttp_on"]:
+                            pos["ttp"] = max(pos["ttp"], pos["hw"] - p.trail_tp_atr * pos["atr"])
+                            if low[i] <= pos["ttp"]:
+                                close_pos(i, pos["ttp"], "trail_tp")
             else:  # short
                 if high[i] >= pos["sl"]:
                     close_pos(i, pos["sl"], "stop")
-                elif low[i] <= pos["tp"]:
+                elif pos["tp_on"] and low[i] <= pos["tp"]:
                     close_pos(i, pos["tp"], "target")
                 else:
                     pos["lw"] = min(pos["lw"], low[i])
-                    if p.use_trailing:
-                        stop_dist = pos["init_sl"] - pos["entry"]
-                        if pos["entry"] - pos["lw"] >= p.trail_start_r * stop_dist:
-                            new_sl = pos["lw"] + p.trail_atr * pos["atr"]
-                            pos["sl"] = min(pos["sl"], new_sl)
+                    stop_dist = pos["init_sl"] - pos["entry"]
+                    if p.use_trailing and pos["entry"] - pos["lw"] >= p.trail_start_r * stop_dist:
+                        pos["sl"] = min(pos["sl"], pos["lw"] + p.trail_atr * pos["atr"])
+                    if p.use_trailing_tp:
+                        if not pos["ttp_on"] and pos["entry"] - pos["lw"] >= p.trail_tp_start_r * stop_dist:
+                            pos["ttp_on"] = True
+                            pos["tp_on"] = False
+                            pos["ttp"] = pos["lw"] + p.trail_tp_atr * pos["atr"]
+                        if pos["ttp_on"]:
+                            pos["ttp"] = min(pos["ttp"], pos["lw"] + p.trail_tp_atr * pos["atr"])
+                            if high[i] >= pos["ttp"]:
+                                close_pos(i, pos["ttp"], "trail_tp")
 
         # ---- 2) entries (only when flat, on last completed bar) --------
         if pos is None and i >= 1 and not np.isnan(atr[i - 1]) and not np.isnan(hh[i - 1]):
@@ -205,6 +237,7 @@ def backtest(df: pd.DataFrame, p: Params):
                             size=size, atr=a, entry_bar=i, entry_time=idx[i],
                             risk_money=risk_money,
                             hw=entry, lw=entry,
+                            tp_on=True, ttp_on=False, ttp=0.0,
                         )
 
         # ---- 3) mark to market ----------------------------------------
@@ -252,10 +285,21 @@ def metrics(curve: pd.Series, trades: list[Trade], max_dd: float, p: Params) -> 
         run = run + 1 if x < 0 else 0
         mc = max(mc, run)
 
+    avg_win = wins.mean() if len(wins) else 0.0
+    avg_loss = losses.mean() if len(losses) else 0.0
+    reasons = {}
+    for t in trades:
+        reasons[t.reason] = reasons.get(t.reason, 0) + 1
+
     return {
         "trades": len(trades),
         "win_rate": len(wins) / len(pnl) * 100,
         "profit_factor": (gross_win / gross_loss) if gross_loss > 0 else float("inf"),
+        "gross_profit": gross_win,
+        "gross_loss": gross_loss,
+        "avg_win": avg_win,
+        "avg_loss": avg_loss,
+        "avg_win_loss_ratio": (avg_win / abs(avg_loss)) if avg_loss else float("inf"),
         "total_return_pct": (end / start - 1) * 100,
         "cagr_pct": ((end / start) ** (1 / years) - 1) * 100 if years > 0 and end > 0 else 0.0,
         "max_dd_pct": max_dd * 100,
@@ -264,6 +308,7 @@ def metrics(curve: pd.Series, trades: list[Trade], max_dd: float, p: Params) -> 
         "avg_r": np.mean([t.r_multiple for t in trades]),
         "max_consec_losses": mc,
         "avg_bars_held": np.mean([t.bars_held for t in trades]),
+        "exits": reasons,
         "final_equity": end,
     }
 

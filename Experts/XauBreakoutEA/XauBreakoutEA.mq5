@@ -8,6 +8,7 @@
 //|    2. Filter   : confirmation (close beyond level, session, news)|
 //|    3. Risk     : ATR-based stop, percent-risk sizing, hard caps  |
 //|    4. Execute  : market entry on breakout, SL/TP, trailing stop   |
+//|                  optional trailing take-profit (exit-only)        |
 //|                                                                  |
 //|  Design rules this EA follows on purpose:                        |
 //|    - No grid. No martingale. Every position has a hard stop.     |
@@ -42,6 +43,9 @@ input group "=== Trade management ==="
 input bool   InpUseTrailing      = true;    // Enable ATR trailing stop
 input double InpTrailAtrMult     = 2.00;    // Trailing distance (x ATR)
 input double InpTrailStartR      = 1.00;    // Start trailing after this R
+input bool   InpUseTrailingTP    = false;   // Enable trailing take-profit (exit-only)
+input double InpTrailTpStartR    = 1.00;    // Activate trailing TP after this R
+input double InpTrailTpAtrMult   = 1.00;    // Trailing TP distance (x ATR)
 
 input group "=== Filters ==="
 input bool   InpUseSession       = true;    // Restrict to London/NY hours
@@ -67,6 +71,14 @@ CNewsGuard     news;
 CSymbolInfo    sym;
 int            h_atr = INVALID_HANDLE;
 datetime       last_bar_time = 0;
+
+// Trailing-TP state: a profit-side trailing level cannot be a broker TP order
+// (a BUY TP must sit above the market, so it can never ratchet down as a trail),
+// so it is tracked internally and closed at market when price retraces to it.
+#define TTP_MAX 16
+ulong  g_ttp_ticket[TTP_MAX];
+double g_ttp_level[TTP_MAX];
+int    g_ttp_count = 0;
 
 //--- trade-event state (see OnTradeTransaction) ---------------------
 ulong          g_pending_request = 0;   // request id we are still waiting to confirm
@@ -159,6 +171,119 @@ bool SpreadOk(void)
 }
 
 //+------------------------------------------------------------------+
+//| Trailing-TP state helpers                                        |
+//+------------------------------------------------------------------+
+int TtpFind(const ulong ticket)
+{
+   for(int i = 0; i < g_ttp_count; i++)
+      if(g_ttp_ticket[i] == ticket)
+         return i;
+   return -1;
+}
+
+void TtpRegister(const ulong ticket, const double level)
+{
+   int i = TtpFind(ticket);
+   if(i >= 0) { g_ttp_level[i] = level; return; }
+   if(g_ttp_count >= TTP_MAX) return;
+   g_ttp_ticket[g_ttp_count] = ticket;
+   g_ttp_level[g_ttp_count]  = level;
+   g_ttp_count++;
+}
+
+void TtpRemove(const ulong ticket)
+{
+   int i = TtpFind(ticket);
+   if(i < 0) return;
+   for(int j = i; j < g_ttp_count - 1; j++)
+   {
+      g_ttp_ticket[j] = g_ttp_ticket[j + 1];
+      g_ttp_level[j]  = g_ttp_level[j + 1];
+   }
+   g_ttp_count--;
+}
+
+// Drop state for tickets that no longer exist (closed by SL/TP/etc).
+void TtpPrune()
+{
+   for(int i = g_ttp_count - 1; i >= 0; i--)
+      if(!PositionSelectByTicket(g_ttp_ticket[i]))
+         TtpRemove(g_ttp_ticket[i]);
+}
+
+//+------------------------------------------------------------------+
+//| Trailing take-profit (exit-only).                                |
+//|                                                                  |
+//| Once a position is in InpTrailTpStartR x R of profit:            |
+//|   - the fixed TP is disabled (otherwise it caps the winner and   |
+//|     the trail could never do anything)                           |
+//|   - a profit-side level trails the extreme by InpTrailTpAtrMult  |
+//|     x ATR, ratcheting only toward profit                         |
+//|   - price retracing to that level closes the position at market  |
+//| The stop loss and the trailing stop remain active underneath.    |
+//| This changes exits only: no grid, no martingale, no sizing.      |
+//+------------------------------------------------------------------+
+void ManageTrailingTP(const double atr)
+{
+   if(!InpUseTrailingTP || atr <= 0.0)
+      return;
+
+   TtpPrune();
+   double point = sym.Point();
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0) continue;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      if((ulong)PositionGetInteger(POSITION_MAGIC) != InpMagic) continue;
+
+      double open  = PositionGetDouble(POSITION_PRICE_OPEN);
+      double tp    = PositionGetDouble(POSITION_TP);
+      long   type  = PositionGetInteger(POSITION_TYPE);
+      double R     = InpStopAtrMult * atr;          // initial stop distance
+      double trail = InpTrailTpAtrMult * atr;
+
+      if(type == POSITION_TYPE_BUY)
+      {
+         double extreme = sym.Bid();
+         double fav     = extreme - open;           // favourable excursion
+         if(fav < InpTrailTpStartR * R)
+            continue;
+         if(tp != 0.0)
+            trade.PositionModify(ticket, PositionGetDouble(POSITION_STOPLOSS), 0.0);
+         double new_level = extreme - trail;
+         int    idx = TtpFind(ticket);
+         if(idx < 0)
+            TtpRegister(ticket, new_level);
+         else if(new_level > g_ttp_level[idx] + point)
+            g_ttp_level[idx] = new_level;
+         idx = TtpFind(ticket);
+         if(idx >= 0 && sym.Bid() <= g_ttp_level[idx])
+            trade.PositionClose(ticket);
+      }
+      else if(type == POSITION_TYPE_SELL)
+      {
+         double extreme = sym.Ask();
+         double fav     = open - extreme;
+         if(fav < InpTrailTpStartR * R)
+            continue;
+         if(tp != 0.0)
+            trade.PositionModify(ticket, PositionGetDouble(POSITION_STOPLOSS), 0.0);
+         double new_level = extreme + trail;
+         int    idx = TtpFind(ticket);
+         if(idx < 0)
+            TtpRegister(ticket, new_level);
+         else if(new_level < g_ttp_level[idx] - point)
+            g_ttp_level[idx] = new_level;
+         idx = TtpFind(ticket);
+         if(idx >= 0 && sym.Ask() >= g_ttp_level[idx])
+            trade.PositionClose(ticket);
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
 //| Trailing stop: move SL to lock in profit once trade is in R      |
 //+------------------------------------------------------------------+
 void ManageTrailing(const double atr)
@@ -211,6 +336,7 @@ void OnTick(void)
       return;
 
    ManageTrailing(atr);          // responsive: runs on every tick
+   ManageTrailingTP(atr);        // trailing take-profit, exit-only
 
    if(!NewBar())                 // signal logic only on completed bars
       return;
@@ -314,6 +440,18 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
          PrintFormat("XauBreakoutEA entry confirmed: deal %I64u, price %.2f, vol %.2f",
                      trans.deal, trans.price, trans.volume);
          g_pending_request = 0;
+      }
+   }
+
+   //--- drop trailing-TP state once a position is fully closed
+   if(trans.type == TRADE_TRANSACTION_DEAL_ADD && trans.symbol == _Symbol)
+   {
+      if(HistoryDealSelect(trans.deal) &&
+         HistoryDealGetInteger(trans.deal, DEAL_ENTRY) == DEAL_ENTRY_OUT)
+      {
+         ulong pos_id = (ulong)HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
+         if(pos_id != 0)
+            TtpRemove(pos_id);
       }
    }
 }
