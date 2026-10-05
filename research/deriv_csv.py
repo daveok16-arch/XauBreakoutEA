@@ -72,6 +72,8 @@ class LoadReport:
     end: str = ""
     inferred_tf: str = ""
     gaps: list = field(default_factory=list)
+    gap_count: int = 0
+    gap_buckets: dict = field(default_factory=dict)
     columns: list = field(default_factory=list)
     timestamp_column: str = ""
     timezone_convention: str = "naive-UTC (raw wall clock, no offset applied)"
@@ -265,11 +267,21 @@ def load_csv(path: str, shift_hours: float = 0.0, keep_volume: bool = True):
     if not base_min and rep.inferred_tf.endswith("min"):
         base_min = float(rep.inferred_tf[:-3])
     rep.gaps = _find_gaps(df.index, base_min)
+    rep.gap_count = len(rep.gaps)
+    # bucket by size so the preflight can distinguish weekend/holiday holes from
+    # genuine data problems without printing thousands of lines
+    for g in rep.gaps:
+        if "missing_bars" not in g:
+            continue
+        mb = g["missing_bars"]
+        key = "1-2 bars" if mb <= 2 else "3-24 bars" if mb <= 24 else \
+              "1-7 days" if mb <= 168 else ">7 days"
+        rep.gap_buckets[key] = rep.gap_buckets.get(key, 0) + 1
 
     if rep.duplicate_timestamps:
         rep.warnings.append(f"{rep.duplicate_timestamps} duplicate timestamps removed (kept first)")
     if rep.gaps:
-        rep.warnings.append(f"{len(rep.gaps)} interior gaps flagged (not filled)")
+        rep.warnings.append(f"{rep.gap_count} interior gaps flagged (not filled)")
 
     df.index.name = "datetime"
     return df[OHLC + (["Volume"] if "Volume" in df.columns else [])], rep
@@ -290,8 +302,11 @@ def format_report(rep: LoadReport) -> str:
         f"  timestamp column    : {rep.timestamp_column}",
         f"  timezone convention : {rep.timezone_convention}"
         + (f" (shifted {rep.shift_hours:+g}h)" if rep.shift_hours else ""),
-        f"  gaps flagged        : {len(rep.gaps)}",
+        f"  gaps flagged        : {rep.gap_count}",
     ]
+    if rep.gap_buckets:
+        lines.append("      by size           : " +
+                     "  ".join(f"{k}: {v}" for k, v in rep.gap_buckets.items()))
     for g in rep.gaps[:10]:
         if "note" in g:
             lines.append(f"      {g['note']}")

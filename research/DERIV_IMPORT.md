@@ -158,16 +158,63 @@ result; it can never turn INCONCLUSIVE into PASS. `validate_import.py` does not
 import or consult `compare_instruments.py`, and a test asserts this so the
 isolation cannot regress.
 
+## Preflight (run this first)
+
+```bash
+python3 research/preflight.py --csv ~/XAUUSD_H1.csv
+```
+
+Cheap, read-only, and it decides whether the expensive experiment is worth
+running. It checks and prints:
+
+```
+=== preflight ===
+  [ok] date range                                 : 2024-05-10 04:00:00 .. 2026-10-02 20:00:00
+  [ok] row count                                  : 13732 bars
+  [ok] inferred timeframe = H1                    : H1
+  [ok] duplicate count = 0                        : 0 duplicates
+  [ok] no malformed rows                          : 0 malformed
+  [ok] no inconsistent OHLC                       : 0 inconsistent
+  [!!] history >= 8 years                         : 2.4 years
+  [ok] bar density plausible (>=80% of expected)  : 96% of ~14,375 expected
+
+  earliest timestamp (authority) : 2024-05-10 04:00:00
+  gaps flagged                   : 21  (1-7 days: 4  1-2 bars: 15  3-24 bars: 1)
+
+  PREFLIGHT: BLOCKED - history >= 8 years
+    history is 2.4 years, 5.6 short of the 8-year gate.
+    Check the broker's server history, not just 'Max bars in chart'.
+    Do NOT run the long-history experiment on this file.
+```
+
+Exit code 0 = clear to run the experiment; 1 = do not run it.
+
+### Why the earliest timestamp is the authority
+
+Setting "Max bars in chart" to Unlimited is necessary but **not sufficient** for
+historical completeness. If the broker's server history itself does not extend
+far enough, the CSV can be perfectly valid - right timeframe, no duplicates, no
+malformed rows - and still far too short for the research gate. A valid file is
+not the same as a sufficient file. The earliest timestamp actually present is
+the authority, and the preflight compares it to the required minimum rather than
+trusting that the export "should" be long enough.
+
+The bar-density check catches the mirror case: a long date range that is
+sparsely populated (for example, only recent months present but a stray old bar
+setting the start date). Density is measured against ~115 H1 bars/week, the
+approximate gold trading week.
+
 ## The clean sequence
 
 ```
-import -> validate -> instrument comparison -> 8+ year H1/H4 experiment
-       -> OOS/regime gate -> only then consider touching Experts/
+preflight -> import -> validate -> instrument comparison -> 8+ year H1/H4 experiment
+          -> OOS/regime gate -> only then consider touching Experts/
 ```
 
-`--compare-instrument` sits between validate and the long-history experiment. It
-tells you how to *read* the long-history numbers; it does not authorise anything
-on its own.
+The preflight is the gate on the gate: it stops a too-short file before it
+consumes the experiment. `--compare-instrument` sits between validate and the
+long-history experiment. It tells you how to *read* the long-history numbers; it
+does not authorise anything on its own.
 
 ## Tests
 
@@ -175,6 +222,6 @@ on its own.
 python3 -m unittest discover -s research/tests -p "test_*.py" -v
 ```
 
-22 tests over three fixtures (MT5 tab-delimited with a gap, semicolon with
+27 tests over three fixtures (MT5 tab-delimited with a gap, semicolon with
 prefixed headers, and a dirty file with a duplicate, a malformed row, an
 inconsistent row and a nonpositive price).
