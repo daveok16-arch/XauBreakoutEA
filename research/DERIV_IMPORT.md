@@ -222,6 +222,46 @@ does not authorise anything on its own.
 python3 -m unittest discover -s research/tests -p "test_*.py" -v
 ```
 
-27 tests over three fixtures (MT5 tab-delimited with a gap, semicolon with
+35 tests: three loader fixtures plus fetcher paging, dedup, epoch conversion, gate isolation and preflight exit codes. 27 cover the (MT5 tab-delimited with a gap, semicolon with
 prefixed headers, and a dirty file with a duplicate, a malformed row, an
 inconsistent row and a nonpositive price).
+
+## Alternative source: the Deriv API
+
+Better than an MT5 CSV export for this project, because it removes two problems
+at once: it is the actual traded instrument (so the spot-vs-futures
+INCONCLUSIVE largely disappears) and it returns true-UTC epochs (so there is no
+broker-server-time guesswork and no `--shift-hours`).
+
+Market data on Deriv is **no-auth**. `ticks_history`, `active_symbols` and
+candles need no API token. An app_id only identifies the application and the
+public default `1089` works for data. Do not pass an API token to this tool - it
+is not needed, and a token can place trades.
+
+```bash
+# 1. DECISION POINT: how far back does Deriv's gold H1 actually go?
+python3 research/deriv_fetch.py --probe --symbol frxXAUUSD
+#    exit 0 = reaches the 8-year gate; exit 1 = too short
+
+# 2. only if the probe clears:
+python3 research/deriv_fetch.py --fetch --symbol frxXAUUSD --out research/data/deriv_XAUUSD_H1_raw.csv
+
+# 3. then the existing pipeline, unchanged:
+python3 research/preflight.py           --csv research/data/deriv_XAUUSD_H1_raw.csv
+python3 research/validate_import.py     --csv research/data/deriv_XAUUSD_H1_raw.csv
+python3 research/compare_instruments.py --csv research/data/deriv_XAUUSD_H1_raw.csv
+python3 research/long_history.py        --csv research/data/deriv_XAUUSD_H1_raw.csv --folds 8
+```
+
+The probe pages backwards until history is exhausted and prints the earliest
+available candle. Depth is the open question - the API has a per-request `count`
+cap, so the fetcher pages with `end` stepping back one granularity at a time and
+dedups by epoch. If the probe shows Deriv's gold history is short, the answer is
+Deriv for execution realism plus a deep-history source (Dukascopy) for the long
+record, reconciled with `compare_instruments.py`.
+
+If the connection returns a Cloudflare 520, that is network egress, not a
+credential problem: run it from a host that can reach the Deriv websocket.
+
+The fetcher's paging, dedup and epoch-conversion logic is covered by tests using
+a fake client, so only the live connection is left to confirm.
