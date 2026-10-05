@@ -104,12 +104,77 @@ The last two conditions exist because a short, single-regime window can pass the
 performance test by luck. On the 2.4-year free series the gate correctly blocks
 with "2.4 years < 8.0 required".
 
+## Instrument comparison (diagnostic only)
+
+```bash
+python3 research/compare_instruments.py --csv ~/XAUUSD_H1.csv
+```
+
+Spot XAUUSD and COMEX GC do not need identical prices for breakout research to
+transfer. What matters is whether their breakouts, volatility, ATR behaviour and
+resulting signals are similar. This tool separates three things:
+
+**A. Price-level basis** (informative, not decisive): basis in absolute and % of
+the reference, mean/median/std, P5/P95, max, drift by quartile, and basis by
+hour of day (session structure).
+
+**B. Return / structure equivalence**: price correlation *and* return
+correlation, return-sign agreement, bar-direction agreement.
+
+**C. Donchian signal equivalence**: runs the same breakout logic on both series
+and reports signal counts, Jaccard overlap, entry-direction agreement, signal
+timestamp displacement, ATR ratio, stop-distance ratio, and trade-level
+agreement.
+
+A worked example, using a synthetic "spot" (1.8 basis + small noise):
+
+```
+RETURN correlation       : 0.9998   (price corr 1.0000)
+bar direction agreement  : 98.2%
+breakout Jaccard overlap : 96.6%
+entry-direction agreement: 100.0%
+signal displacement      : median 0.0h
+ATR ratio                : mean 1.001
+-> structure and signals look equivalent; the futures baseline is probably usable
+```
+
+And the failure mode it is designed to catch - a 2-hour session mismatch:
+
+```
+price correlation        : 0.9998   <- looks fine
+RETURN correlation       : 0.0746   <- the one that matters
+breakout Jaccard overlap : 11.9%
+signal displacement      : median 2.0h
+-> material structural differences. Do NOT use the futures baseline.
+```
+
+That contrast is the whole point: **price correlation of 99.98% can coexist with
+a completely broken structural relationship.**
+
+### Gate isolation
+
+`--compare-instrument` is strictly diagnostic. It **explains** an INCONCLUSIVE
+result; it can never turn INCONCLUSIVE into PASS. `validate_import.py` does not
+import or consult `compare_instruments.py`, and a test asserts this so the
+isolation cannot regress.
+
+## The clean sequence
+
+```
+import -> validate -> instrument comparison -> 8+ year H1/H4 experiment
+       -> OOS/regime gate -> only then consider touching Experts/
+```
+
+`--compare-instrument` sits between validate and the long-history experiment. It
+tells you how to *read* the long-history numbers; it does not authorise anything
+on its own.
+
 ## Tests
 
 ```bash
 python3 -m unittest discover -s research/tests -p "test_*.py" -v
 ```
 
-16 tests over three fixtures (MT5 tab-delimited with a gap, semicolon with
+22 tests over three fixtures (MT5 tab-delimited with a gap, semicolon with
 prefixed headers, and a dirty file with a duplicate, a malformed row, an
 inconsistent row and a nonpositive price).

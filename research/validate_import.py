@@ -199,6 +199,10 @@ def gate_overlap(csv_path: str, tf: str = "h1") -> bool:
     print("  certify this import. Use the imported series for the long-history study")
     print("  only after confirming it is internally clean, and expect its 2024-2026")
     print("  numbers to differ from the futures-proxy baseline by construction.")
+    print("\n  To understand WHY, run the diagnostic (it explains, it cannot pass):")
+    print("    python3 research/compare_instruments.py --csv <this file>")
+    print("  Gate isolation: compare_instruments is diagnostic only and is never")
+    print("  consulted here. INCONCLUSIVE cannot be turned into PASS by it.")
     return False
 
 
