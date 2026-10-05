@@ -83,7 +83,89 @@ This is where signal-following actually fails.
   your broker's spread, latency, and lot-scaling - the exact gap the subscriber
   above hit.
 
+## Deep dive: Gold Reaper V2 (our benchmark)
+
+Reverse-engineered from its public pages and published balance curve.
+Reproduce with `python3 research/gold_reaper_analysis.py`.
+
+### What it actually is
+
+Gold Reaper is not a signal-first product - it is an **EA being sold on the
+MQL5 Market** (product 111357, $949, published Feb 2024, v5.1, 119 purchases/
+month). The signal is the vendor's own live/demo account. The vendor's own
+description:
+
+> "trading breakouts of important support and resistance levels ... All trades
+> have a stoploss and takeprofit, but also use a trailing stoploss and trailing
+> takeprofit ... No grid / No Martingale / No risky risk management."
+
+So it is the **same core edge we built** (gold breakout of S/R), executed with
+more machinery around it.
+
+### Its documented structure
+
+| Element | Gold Reaper | Our EA |
+|---|---|---|
+| Core edge | breakout of S/R | breakout of S/R (Donchian) |
+| Timeframes | **multiple at once** | one |
+| Internal strategies | **several, risk-spread** | one |
+| Stop / target | SL + TP + trailing SL + **trailing TP** | SL + TP + trailing SL |
+| Sizing anchor | **max allowed DD setting** vs strategy's historical max DD | fixed 0.75% per trade |
+| Frequency | auto from balance + max DD | fixed |
+| News filter | **NFP filter** (+ auto GMT) | calendar blackout |
+| Weekend | Friday stop hour | Friday stop hour |
+| Anti-correlation | entry/exit/trail randomisation | none |
+| Chart timeframe | H1 | H1 |
+| Min balance | $600 | - |
+
+The notable design choice is **sizing**: you set a maximum allowed drawdown, and
+the EA sizes positions so that its historical worst drawdown maps onto your
+budget. That is a different paradigm from fixed-fractional risk, and it is
+honest - it does not promise more than the account can bear.
+
+### Did we confirm "no martingale"?
+
+Yes, from the published balance curve (868 reconstructed balance steps):
+
+| Metric | Value | Reads as |
+|---|---|---|
+| wins / losses | 409 / 459 | ~47% win rate |
+| avg win / avg loss | $21.70 / $8.20 | **2.65 reward:risk** |
+| longest loss run | 11 | survivable |
+| loss as % of balance by quartile | 0.37 / 0.19 / 0.22 / 0.30 | **flat** = fixed-fractional |
+| win as % of balance by quartile | 0.62 / 0.66 / 0.68 / 0.61 | flat |
+| corr(drawdown depth, loss size) | +0.30 | weak, not martingale |
+
+The engine of the returns is **reward:risk (2.65)**, not win rate and not
+escalating size. Losses stay roughly constant as a share of balance across the
+whole life of the account, which is exactly what fixed-fractional sizing looks
+like and the opposite of martingale. The +0.30 correlation is mild and mostly a
+small-account/minimum-lot artefact early on, where a $1,600 account cannot size
+below the broker minimum.
+
+### What this means for our targets
+
+- The **~110% CAGR is real but it is bought with ~30% drawdown** (the vendor
+  states a 30% max DD; our balance-curve recomputation showed 16.8%, so equity
+  DD is the higher, truer figure). It is not a low-risk curve.
+- Our EA's modelled 12.5% drawdown at ~1.7% CAGR is far more conservative. The
+  honest gap is **not** the strategy - it is the **risk budget and the R:R**.
+  Gold Reaper risks multiples of what we do per trade and lets winners run with
+  a trailing TP.
+- The single most portable idea is the **trailing TP** and the
+  **max-drawdown-anchored sizing**. Both are straightforward to add to our EA.
+
+### The copying warning, quantified
+
+The signal page lists per-broker slippage for real subscriber accounts. Most
+show 0.00, but one (UltimaMarkets-Live 1) shows 0.60 pips, and subscriber
+reviews report the gap directly. The page's own advice is to **run the EA rather
+than copy the signal**: "There will be less slippage this way, and the EA will
+fully adapt to your account balance." That is the vendor conceding the copying
+problem.
+
 ## Recommendation
+
 
 Use signals as a **benchmark**, not a product to buy.
 
