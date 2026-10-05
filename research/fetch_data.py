@@ -17,7 +17,6 @@ import os
 import sys
 
 import pandas as pd
-import yfinance as yf
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 SYMBOL = "GC=F"
@@ -30,6 +29,8 @@ SPECS = {
 
 
 def fetch(name: str) -> pd.DataFrame:
+    import yfinance as yf   # only needed for downloads; the CSV path avoids it
+
     spec = SPECS[name]
     df = yf.download(
         SYMBOL,
@@ -47,8 +48,20 @@ def fetch(name: str) -> pd.DataFrame:
     return df
 
 
-def load(name: str) -> pd.DataFrame:
-    """Load a cached series, fetching it first if necessary."""
+def load(name: str, csv_path: str | None = None) -> pd.DataFrame:
+    """Load a cached series, fetching it first if necessary.
+
+    If `csv_path` is given, the series is loaded from that Deriv/MT5 export
+    instead of the cache. The raw file is never modified; the normalised frame
+    is returned in memory and is NOT written back to the cache, so the existing
+    download path stays exactly as it was.
+    """
+    if csv_path:
+        import deriv_csv
+        df, report = deriv_csv.load_csv(csv_path)
+        _LAST_REPORT.clear()
+        _LAST_REPORT.update(report.as_dict())
+        return df
     path = os.path.join(DATA_DIR, f"{SYMBOL.replace('=', '_')}_{name}.csv")
     if not os.path.exists(path):
         os.makedirs(DATA_DIR, exist_ok=True)
@@ -57,6 +70,15 @@ def load(name: str) -> pd.DataFrame:
         return _normalize_index(df)
     df = pd.read_csv(path, index_col=0)
     return _normalize_index(df)
+
+
+# Populated when load() is called with csv_path, so callers can print the
+# validation report without re-reading the file.
+_LAST_REPORT: dict = {}
+
+
+def last_csv_report() -> dict:
+    return dict(_LAST_REPORT)
 
 
 def _normalize_index(df: pd.DataFrame) -> pd.DataFrame:
@@ -70,7 +92,29 @@ def _normalize_index(df: pd.DataFrame) -> pd.DataFrame:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--intraday", action="store_true", help="also fetch 5m bars")
+    ap.add_argument("--csv", metavar="PATH",
+                    help="load a Deriv/MT5 export instead of downloading; prints "
+                         "a validation report and writes a normalised copy to "
+                         "research/data/ (the raw file is left untouched)")
+    ap.add_argument("--name", default="h1", help="series name for --csv output")
+    ap.add_argument("--shift-hours", type=float, default=0.0,
+                    help="shift --csv timestamps to align server time to UTC")
     args = ap.parse_args()
+
+    if args.csv:
+        import deriv_csv
+        try:
+            df, report = deriv_csv.load_csv(args.csv, shift_hours=args.shift_hours)
+        except Exception as e:  # noqa: BLE001
+            print(f"FAILED: {e}")
+            return 1
+        print(deriv_csv.format_report(report))
+        os.makedirs(DATA_DIR, exist_ok=True)
+        out = os.path.join(DATA_DIR, f"{SYMBOL.replace('=', '_')}_{args.name}.csv")
+        df.to_csv(out)
+        print(f"\nnormalised copy -> {out}")
+        print(f"raw file left untouched: {os.path.abspath(args.csv)}")
+        return 0
 
     os.makedirs(DATA_DIR, exist_ok=True)
     names = ["daily", "h1"] + (["m5"] if args.intraday else [])

@@ -11,6 +11,11 @@ MetaTrader. Uses COMEX gold futures (`GC=F`) as an XAUUSD proxy.
 | `robustness.py` | parameter sensitivity, cost stress, bootstrap Monte Carlo |
 | `signals_scan.py` | scan MQL5 Signals, recompute DD/CAGR, flag traps |
 | `SIGNALS.md` | signals analysis findings |
+| `deriv_csv.py` | Deriv/MT5 CSV loader (strict, tz-explicit, gap-flagging) |
+| `validate_import.py` | import validation gate (self-consistency + overlap) |
+| `long_history.py` | long-history H1/H4 study with a production gate |
+| `DERIV_IMPORT.md` | how to export/import/validate a Deriv CSV |
+| `tests/` | loader tests + fixtures |
 | `portfolio.py` | multi-timeframe legs under a shared risk budget |
 | `h4.py` | higher-timeframe leg (no look-ahead, realistic fills) |
 | `PORTFOLIO.md` | shared-risk + overlap findings |
