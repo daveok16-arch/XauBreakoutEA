@@ -106,6 +106,55 @@ class Trade:
     r_multiple: float
     reason: str
     bars_held: int
+    leg: str = ""          # which strategy leg produced it (multi-timeframe runs)
+
+
+def manage_bar(pos: dict, i: int, high, low, p: Params):
+    """Advance an open position over bar i.
+
+    Returns (exit_price, reason) if the position closes on this bar, else None.
+    Mutates pos in place (stop, extremes, trailing-TP state).
+
+    Shared by the single-series engine and the multi-timeframe portfolio engine
+    so both apply exactly the same exit rules.
+    """
+    if pos["side"] == "long":
+        if low[i] <= pos["sl"]:
+            return pos["sl"], "stop"
+        if pos["tp_on"] and high[i] >= pos["tp"]:
+            return pos["tp"], "target"
+        pos["hw"] = max(pos["hw"], high[i])
+        stop_dist = pos["entry"] - pos["init_sl"]
+        if p.use_trailing and pos["hw"] - pos["entry"] >= p.trail_start_r * stop_dist:
+            pos["sl"] = max(pos["sl"], pos["hw"] - p.trail_atr * pos["atr"])
+        if p.use_trailing_tp:
+            if not pos["ttp_on"] and pos["hw"] - pos["entry"] >= p.trail_tp_start_r * stop_dist:
+                pos["ttp_on"] = True
+                pos["tp_on"] = False
+                pos["ttp"] = pos["hw"] - p.trail_tp_atr * pos["atr"]
+            if pos["ttp_on"]:
+                pos["ttp"] = max(pos["ttp"], pos["hw"] - p.trail_tp_atr * pos["atr"])
+                if low[i] <= pos["ttp"]:
+                    return pos["ttp"], "trail_tp"
+    else:  # short
+        if high[i] >= pos["sl"]:
+            return pos["sl"], "stop"
+        if pos["tp_on"] and low[i] <= pos["tp"]:
+            return pos["tp"], "target"
+        pos["lw"] = min(pos["lw"], low[i])
+        stop_dist = pos["init_sl"] - pos["entry"]
+        if p.use_trailing and pos["entry"] - pos["lw"] >= p.trail_start_r * stop_dist:
+            pos["sl"] = min(pos["sl"], pos["lw"] + p.trail_atr * pos["atr"])
+        if p.use_trailing_tp:
+            if not pos["ttp_on"] and pos["entry"] - pos["lw"] >= p.trail_tp_start_r * stop_dist:
+                pos["ttp_on"] = True
+                pos["tp_on"] = False
+                pos["ttp"] = pos["lw"] + p.trail_tp_atr * pos["atr"]
+            if pos["ttp_on"]:
+                pos["ttp"] = min(pos["ttp"], pos["lw"] + p.trail_tp_atr * pos["atr"])
+                if high[i] >= pos["ttp"]:
+                    return pos["ttp"], "trail_tp"
+    return None
 
 
 def backtest(df: pd.DataFrame, p: Params):
@@ -167,47 +216,9 @@ def backtest(df: pd.DataFrame, p: Params):
 
         # ---- 1) manage any open position on this bar -------------------
         if pos is not None:
-            if pos["side"] == "long":
-                # adverse first: stop
-                if low[i] <= pos["sl"]:
-                    close_pos(i, pos["sl"], "stop")
-                # profit side: fixed TP unless the trailing TP has taken over
-                elif pos["tp_on"] and high[i] >= pos["tp"]:
-                    close_pos(i, pos["tp"], "target")
-                else:
-                    pos["hw"] = max(pos["hw"], high[i])
-                    stop_dist = pos["entry"] - pos["init_sl"]
-                    if p.use_trailing and pos["hw"] - pos["entry"] >= p.trail_start_r * stop_dist:
-                        pos["sl"] = max(pos["sl"], pos["hw"] - p.trail_atr * pos["atr"])
-                    if p.use_trailing_tp:
-                        if not pos["ttp_on"] and pos["hw"] - pos["entry"] >= p.trail_tp_start_r * stop_dist:
-                            # activate: disable the fixed TP and start trailing profit
-                            pos["ttp_on"] = True
-                            pos["tp_on"] = False
-                            pos["ttp"] = pos["hw"] - p.trail_tp_atr * pos["atr"]
-                        if pos["ttp_on"]:
-                            pos["ttp"] = max(pos["ttp"], pos["hw"] - p.trail_tp_atr * pos["atr"])
-                            if low[i] <= pos["ttp"]:
-                                close_pos(i, pos["ttp"], "trail_tp")
-            else:  # short
-                if high[i] >= pos["sl"]:
-                    close_pos(i, pos["sl"], "stop")
-                elif pos["tp_on"] and low[i] <= pos["tp"]:
-                    close_pos(i, pos["tp"], "target")
-                else:
-                    pos["lw"] = min(pos["lw"], low[i])
-                    stop_dist = pos["init_sl"] - pos["entry"]
-                    if p.use_trailing and pos["entry"] - pos["lw"] >= p.trail_start_r * stop_dist:
-                        pos["sl"] = min(pos["sl"], pos["lw"] + p.trail_atr * pos["atr"])
-                    if p.use_trailing_tp:
-                        if not pos["ttp_on"] and pos["entry"] - pos["lw"] >= p.trail_tp_start_r * stop_dist:
-                            pos["ttp_on"] = True
-                            pos["tp_on"] = False
-                            pos["ttp"] = pos["lw"] + p.trail_tp_atr * pos["atr"]
-                        if pos["ttp_on"]:
-                            pos["ttp"] = min(pos["ttp"], pos["lw"] + p.trail_tp_atr * pos["atr"])
-                            if high[i] >= pos["ttp"]:
-                                close_pos(i, pos["ttp"], "trail_tp")
+            hit = manage_bar(pos, i, high, low, p)
+            if hit is not None:
+                close_pos(i, hit[0], hit[1])
 
         # ---- 2) entries (only when flat, on last completed bar) --------
         if pos is None and i >= 1 and not np.isnan(atr[i - 1]) and not np.isnan(hh[i - 1]):
