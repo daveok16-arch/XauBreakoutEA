@@ -191,6 +191,57 @@ with *losses* (recovery). `gold_reaper_analysis.py` measures the latter.
 Both are legitimate designs. They differ in where the edge comes from and in how
 much they depend on the scalp win rate clearing break-even after spread.
 
+## The foundation, stated as one framework
+
+We are not abandoning the Gold Reaper-derived work, and we are not chasing any
+single bot. The point is that both are instances of the same equation:
+
+    EV = (edge per trade, net of cost) x (number of trades) x (compounding)
+
+Two mechanisms we understand, differing in where each term comes from:
+
+| | our breakout EA | scalp + tiered sizing |
+|---|---|---|
+| edge per trade | long-horizon trend, ~+0.36R long-only | short-horizon scalp, must clear p* |
+| trades | ~8-10/year | many per day |
+| compounding | fixed % of equity from stop distance | min lot stepped up by equity tiers |
+| product | drawdown control | fast compounding on a small account |
+
+The three discriminators that decide whether a mechanism is genuine - regardless
+of how the equity curve looks:
+
+1. Net edge per trade is positive after real costs. For a scalp this is the win
+   rate clearing break-even p* = (SL + s) / (TP + SL).
+2. Sizing basis is EQUITY (compounding) not LOSSES (recovery/martingale). The
+   latter hides ruin in the tail.
+3. Survival is judged by P(ruin) across many paths, not by the curve.
+
+Our tools already implement each part of this:
+
+| tool | question it answers |
+|---|---|
+| `preflight.py` | is the data fit to test on at all |
+| `ev_decomposition.py` | is the edge real, per bucket, or noise |
+| `scalp_ev.py` | break-even win rate; does tiered sizing compound or bleed |
+| `growth_math.py` | small-account survival, P(reach) vs P(ruin) |
+| `gold_reaper_analysis.py` | recovery vs compounding fingerprint from a curve |
+
+So no single bot needs to be reverse-engineered to advance the work: the
+foundation describes the whole class. A specific bot is an instance, and if it
+exposes a trade list we can score it against the acceptance test in minutes.
+
+## Acceptance test for any scalp + tiered candidate
+
+Applied when a candidate's trades are available (any of the above mechanisms):
+
+- [ ] win rate > p* with margin, using the REAL broker spread (not the advertised one)
+- [ ] size steps up with equity, not with drawdown
+- [ ] net edge per scalp positive after costs
+- [ ] P(ruin) acceptable across paths
+- [ ] positive in every chronological chunk (not one regime)
+
+Until a candidate clears all five, its curve - however good - is not evidence.
+
 ## Next step, in order
 
 1. Confirm the long-only daily result survives costs and the OOS/regime gate on
