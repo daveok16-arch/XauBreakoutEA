@@ -133,6 +133,64 @@ given EA has a genuine, sustained net edge per trade (~+0.2R or better). A
 martingale/recovery EA produces a similar early curve with ruin hidden in the
 tail, which is why the mechanism - not the curve - is the discriminator.
 
+## The fast-scalper mechanism, stated fairly
+
+The mechanism behind the small-account EAs that grow $3-$10 to thousands:
+
+1. start at the broker minimum lot on a small account
+2. **step the lot size up in levels as the account grows** (balance tiers)
+3. scalp fast: many trades, very short holds, open and close almost at once
+
+Balance-tiered sizing is COMPOUNDING (size tracks equity). It is NOT recovery
+martingale (size tracks losses). Different mechanisms; this section is about the
+first, and it is legitimate.
+
+What decides everything is one number: the break-even win rate after spread.
+For TP, SL and round-trip spread s (same units):
+
+    p* = (SL + s) / (TP + SL)
+
+`python3 research/scalp_ev.py --table` prints it across a grid:
+
+```
+   TP    SL | spread=0.1   spread=0.2   spread=0.3
+  0.2   0.5 |     85.7%       100.0%       114.3%
+  0.3   1.0 |     84.6%        92.3%       100.0%
+  0.5   1.0 |     73.3%        80.0%        86.7%
+  1.0   1.0 |     55.0%        60.0%        65.0%
+  2.0   1.0 |     36.7%        40.0%        43.3%
+```
+
+Tight TP with a wide spread pushes the required win rate toward and past 100%.
+A scalper needs a mechanism that genuinely wins more often than p*.
+
+Tiered sizing does not change this - it changes how fast you compound, or bleed.
+Simulated ($10 start, tiered lots 0.01->0.2, 12,500 scalps):
+
+```
+edge +6.25% of risked $  ->  median $10 -> $19.36,  P(ruin) 0.0%
+edge -6.25% of risked $  ->  median $10 -> $5.00,   P(ruin) 100%
+```
+
+So the design is coherent and the growth is real *if* the scalp edge clears
+break-even. The thing to measure is not the curve (a recovery EA can fake one),
+but the win rate vs p*, and whether size steps up with *equity* (compounding) or
+with *losses* (recovery). `gold_reaper_analysis.py` measures the latter.
+
+## How this differs from our EA
+
+| | our breakout EA | fast tiered scalper |
+|---|---|---|
+| frequency | ~10/yr (daily) | many per day |
+| sizing | fixed % of equity, from stop distance | min lot, stepped up by equity tiers |
+| sizing basis | risk (stop) | equity level (compounding) |
+| edge source | long-horizon trend | short-horizon mean reversion / momentum |
+| cost sensitivity | low (~1% of R) | high (spread vs tight TP) |
+| product | drawdown control | fast compounding on a small account |
+
+Both are legitimate designs. They differ in where the edge comes from and in how
+much they depend on the scalp win rate clearing break-even after spread.
+
 ## Next step, in order
 
 1. Confirm the long-only daily result survives costs and the OOS/regime gate on
