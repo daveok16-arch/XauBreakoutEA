@@ -281,6 +281,61 @@ including the 2011-2015 bear, so it is not just the bull years carrying it.
 The implication: we do not imitate Gold Reaper, and we are not symmetric. We
 trade the one direction where this mechanism has a demonstrated edge.
 
+## Starting from $12 (small-account viability)
+
+Our EA: median stop 18.6 price units, 7.5 trades/yr, edge +0.357R, avg win
++1.58R / loss -0.89R. One minimum lot (0.01) risks:
+
+```
+standard  100 oz/lot -> min lot 1.00 oz -> risks $18.63 = 155.3% of $12
+micro      10 oz/lot -> min lot 0.10 oz -> risks $ 1.86 =  15.5% of $12
+cent/1oz    1 oz/lot -> min lot 0.01 oz -> risks $ 0.19 =   1.6% of $12
+```
+
+So the FIRST question at $12 is not edge, it is whether one minimum lot fits:
+
+- On a 100 oz standard account: it does NOT. The minimum trade risks 155% of the
+  account, so the EA cannot place a single trade without risking more than the
+  whole balance. `can_trade()` returns false. P(reach $5000) = 0%, P(ruin) = 100%.
+- On a 10 oz micro account: min lot risks 15.5%, tradeable. P(reach $5000) = 91.6%,
+  P(ruin) = 8.4%.
+- On a 1 oz cent account: min lot risks 1.6%. P(reach $5000) = 100%, P(ruin) = 0%.
+
+But the number that actually matters is TIME. `growth_math.simulate` gives the
+trades needed at 0.75% risk (edge +0.357R): **~2,256 trades**.
+
+```
+risk%   P(reach)  P(ruin)  med trades  yrs @ 7.5 trades/yr
+ 0.75      91.6%     8.4%        1362                181.6
+ 1.00      91.6%     8.4%        1096                146.1
+ 2.00      91.6%     8.4%         640                 85.3
+ 3.00      91.6%     8.4%         465                 62.0
+ 5.00      91.6%     8.4%         311                 41.5
+```
+
+Note P(reach)/P(ruin) are INVARIANT to risk% (91.6%/8.4% at every level). Raising
+risk scales gains and losses symmetrically, so it does not change the odds of
+reaching target before ruin - it only shortens the calendar. The bottleneck is
+therefore trade FREQUENCY, not edge and not risk size:
+
+```
+reach $5000 in  1 yr -> need 2256 trades/yr = 9.0 trades/day
+reach $5000 in  5 yr -> need  451 trades/yr = 1.8 trades/day
+reach $5000 in 10 yr -> need  226 trades/yr = 0.9 trades/day
+
+OUR EV       :   7.5 trades/yr  -> ~301 years
+Gold Reaper  :  ~310 trades/yr  -> ~7.3 years   (1.24 closes/day)
+fast scalper : ~12500 trades/yr -> ~0.2 years   (50/day)
+```
+
+Conclusion, stated plainly: our EV CAN run a $12 account, but only where the
+minimum lot is small (micro/cent), and at ~7.5 trades/yr it would take centuries
+to reach $5000. It is not broken at $12 - it is the wrong tool for that job.
+Growing $12 fast requires FREQUENCY x leverage, which is exactly what Gold Reaper
+and the scalp bots have and what our swing design deliberately does not. That is
+the real, honest difference between the mechanisms - and it validates the user's
+observation rather than dismissing it.
+
 ## Next step, in order
 
 1. Confirm the long-only daily result survives costs and the OOS/regime gate on
