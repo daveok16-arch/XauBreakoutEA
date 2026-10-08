@@ -97,36 +97,41 @@ flattered.
 ## Why not more trades / scalping?
 
 A recurring question: instead of one position at a time, why not open many trades
-and scalp to grow the account? We tested it. Same breakout logic, three
-frequencies:
+and scalp to grow the account? The earlier version of this section claimed the
+M5 sample showed scalping "dies", citing CAGR -34%. That was wrong to assert:
+the M5 sample available at the time was only 2.4 MONTHS, so the number was noise,
+and a limitation of our breakout mechanism says nothing about scalping in
+general. Corrected here.
+
+What the fixed breakout logic does show across horizons (same mechanism, so this
+is about our edge, not about scalping as a class):
 
 ```
-timeframe   trades/yr   avg R/trade   PF    cost as % of R
-daily             10       +0.240     1.53       1.0%
-H1               183       +0.173     1.37       1.1%
-M5 (scalping)    149       +0.008     1.00       3.3%   (CAGR -34%, PF 1.00)
+timeframe   trades/yr   avg R/trade   PF
+daily             10       +0.240     1.53
+H1               183       +0.173     1.37
+M5 (2.4mo only)  149       +0.008     1.00   <- sample too short to conclude
 ```
 
-The edge per trade decays as the horizon shortens, and at M5 it is
-indistinguishable from zero. Three reasons:
+The lookback sweep is monotonic (20 bars -> +0.157R, 250 bars -> +0.460R), so
+this particular trend edge does weaken as the horizon shortens. That is a fact
+about *this mechanism*. A different, faster mechanism can carry a different edge.
 
-1. The edge is trend-following and weakens with horizon. The lookback sweep is
-   monotonic (20 bars -> +0.157R, 250 bars -> +0.460R). Scalping trades the
-   weakest end of that curve.
-2. Fixed costs (spread + commission ~ $0.22/oz) do not shrink with the trade.
-   They are ~1% of R on daily (stop ~$22/oz) but ~3.3% of R on M5 (stop ~$6/oz),
-   and there are 15x more of them.
-3. Stacking simultaneous correlated positions adds risk, not independent EV. The
-   H1+H4 study showed ~99% same-direction correlation with the shared budget
-   never binding - leverage, not diversification.
+Small-account growth is a separate question, and growth_math.py shows it is
+feasible given a real edge: the broker minimum lot forces large early leverage,
+which compounds a genuine edge fast. From $3 to $5,000 at 1 oz min lot, 3% risk:
 
-Account growth comes from risk-per-trade x edge x compounding, not trade count. A
-high CAGR needs a high risk %, and high risk on gold (44% drawdown) is ruin. The
-measured product is the drawdown benefit (8% vs 44%), not a return multiplier.
+```
+win   R:R   edge/trade   P(reach)   P(ruin)
+0.50  1.5     +0.250      95.8%      4.2%
+0.45  2.0     +0.350      96.3%      3.7%
+0.50  1.0     +0.000       0.0%    100.0%
+```
 
-The one legitimate frequency lever is a shorter *trend* horizon (H1: 183
-trades/yr, edge survives at +0.173R), not scalping the noise. Scalping-to-grow is
-also the exact recovery/martingale fingerprint gold_reaper_analysis.py detects.
+So the question is not whether $3 -> $5,000 is possible (it is), but whether a
+given EA has a genuine, sustained net edge per trade (~+0.2R or better). A
+martingale/recovery EA produces a similar early curve with ruin hidden in the
+tail, which is why the mechanism - not the curve - is the discriminator.
 
 ## Next step, in order
 
