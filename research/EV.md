@@ -94,6 +94,40 @@ no edge or adds correlated leverage. The honest EA is a focused long-only trend
 system, sold on drawdown control - not the "40% CAGR" that the bull market
 flattered.
 
+## Why not more trades / scalping?
+
+A recurring question: instead of one position at a time, why not open many trades
+and scalp to grow the account? We tested it. Same breakout logic, three
+frequencies:
+
+```
+timeframe   trades/yr   avg R/trade   PF    cost as % of R
+daily             10       +0.240     1.53       1.0%
+H1               183       +0.173     1.37       1.1%
+M5 (scalping)    149       +0.008     1.00       3.3%   (CAGR -34%, PF 1.00)
+```
+
+The edge per trade decays as the horizon shortens, and at M5 it is
+indistinguishable from zero. Three reasons:
+
+1. The edge is trend-following and weakens with horizon. The lookback sweep is
+   monotonic (20 bars -> +0.157R, 250 bars -> +0.460R). Scalping trades the
+   weakest end of that curve.
+2. Fixed costs (spread + commission ~ $0.22/oz) do not shrink with the trade.
+   They are ~1% of R on daily (stop ~$22/oz) but ~3.3% of R on M5 (stop ~$6/oz),
+   and there are 15x more of them.
+3. Stacking simultaneous correlated positions adds risk, not independent EV. The
+   H1+H4 study showed ~99% same-direction correlation with the shared budget
+   never binding - leverage, not diversification.
+
+Account growth comes from risk-per-trade x edge x compounding, not trade count. A
+high CAGR needs a high risk %, and high risk on gold (44% drawdown) is ruin. The
+measured product is the drawdown benefit (8% vs 44%), not a return multiplier.
+
+The one legitimate frequency lever is a shorter *trend* horizon (H1: 183
+trades/yr, edge survives at +0.173R), not scalping the noise. Scalping-to-grow is
+also the exact recovery/martingale fingerprint gold_reaper_analysis.py detects.
+
 ## Next step, in order
 
 1. Confirm the long-only daily result survives costs and the OOS/regime gate on
