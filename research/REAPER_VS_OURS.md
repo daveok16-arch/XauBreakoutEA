@@ -51,6 +51,45 @@ its record is not one lucky era. That is a point in its favour.
 
 **Ours has half the drawdown** (8.2% vs 16.8%) and no recovery risk.
 
+## Trade cadence: does it hold, and how many at once?
+
+```
+OURS (long-only daily):
+  trades               : 196
+  avg hold             : 5.2 bars (~5 trading days)
+  median hold          : 4 bars
+  longest hold         : 70 bars
+  positions at a time  : 1 (InpMaxPositions = 1)
+  time in market       : ~16% of bars
+
+GOLD REAPER (public curve, 1.9 years):
+  closed trades        : 875
+  trades per day       : 1.24  (~37.5/month)
+  gap between closes   : median 0.37 h (~22 min), mean 19.5 h
+  closes within 1 min  : 13%
+  closes within 5 min  : 32%
+  closes within 1 h    : 61%
+  max closes in 5 min  : 4
+  max closes in 1 hour : 9
+```
+
+Ours HOLDS: one position at a time, typically about a week, sometimes up to 70
+bars, flat ~84% of the time. That is a swing/trend system by design - the hold is
+what lets the 2.6:1 winners develop.
+
+Gold Reaper is neither one-at-a-time nor a high-frequency scalper. It closes
+~1.24 trades/day (about 45x ours) at a median ~22 minutes apart, but closes
+arrive in BURSTS - up to 4 in five minutes and 9 in an hour. Bursty closes imply
+it holds MULTIPLE positions simultaneously and closes them in groups.
+
+Limit on the inference: the balance curve shows CLOSES only, not opens. So the
+frequency (1.24/day) is measured, and the clustering strongly implies concurrent
+positions, but concurrency cannot be proven or counted from public data.
+
+Combined with the +0.302 recovery fingerprint, the picture is a multi-position
+system that opens several trades, sometimes adds/recovers, and closes in groups -
+mechanically different from our single-position swing design.
+
 ## Honest caveats
 
 - Gold Reaper's R is normalised by its own average loss. If its lot sizing varies
