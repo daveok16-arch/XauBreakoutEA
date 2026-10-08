@@ -15,6 +15,10 @@ MetaTrader. Uses COMEX gold futures (`GC=F`) as an XAUUSD proxy.
 | `preflight.py` | cheap pre-check before the expensive experiment |
 | `deriv_fetch.py` | Deriv API data source (probe depth / fetch H1) |
 | `STATUS.md` | where the project stands: proven / unproven / blocked |
+| `broker_profile.py` | detect broker spec (contract/lots/tick/cost) - no hard-coding |
+| `growth_math.py` | small-account survival: P(reach) vs P(ruin) |
+| `scalp_ev.py` | break-even win rate + tiered-sizing simulation |
+| `BROKER.md` | how broker detection works and how to capture the spec |
 | `ev_decomposition.py` | split the edge into buckets, verdict each |
 | `EV.md` | where the expectancy actually comes from |
 | `validate_import.py` | import validation gate (self-consistency + overlap) |

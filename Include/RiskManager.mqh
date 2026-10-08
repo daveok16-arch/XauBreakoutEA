@@ -105,6 +105,63 @@ public:
       return(true);
    }
 
+   //+---------------------------------------------------------------+
+   //| Broker self-detection.                                         |
+   //|                                                                |
+   //| Everything the EV needs about a broker is read from SymbolInfo* |
+   //| at init, so the EA configures itself on any broker/account type |
+   //| (100 oz standard, 10 oz micro, 1 oz cent) with no edits. The    |
+   //| block printed below is parseable by research/broker_profile.py. |
+   //+---------------------------------------------------------------+
+   double            EstimateCommissionPerLot(void) const
+   {
+      // Best-effort: average |commission| per lot over recent closed deals on
+      // this symbol. 0 when history is empty - then it must be set manually.
+      if(!HistorySelect(0, TimeCurrent()))
+         return(0.0);
+      int total = HistoryDealsTotal();
+      double sum = 0.0, vol = 0.0;
+      int scanned = 0;
+      for(int i = total - 1; i >= 0 && scanned < 200; i--)
+      {
+         ulong ticket = HistoryDealGetTicket(i);
+         if(ticket == 0)
+            continue;
+         if(HistoryDealGetString(ticket, DEAL_SYMBOL) != m_sym.Name())
+            continue;
+         double v = HistoryDealGetDouble(ticket, DEAL_VOLUME);
+         if(v > 0.0)
+         {
+            sum += MathAbs(HistoryDealGetDouble(ticket, DEAL_COMMISSION));
+            vol += v;
+            scanned++;
+         }
+      }
+      return(vol > 0.0 ? sum / vol : 0.0);
+   }
+
+   void              PrintBrokerProfile(void) const
+   {
+      double spread_pts = (m_point > 0.0) ? (m_sym.Ask() - m_sym.Bid()) / m_point : 0.0;
+      double stops_lvl  = (double)SymbolInfoInteger(m_sym.Name(), SYMBOL_TRADE_STOPS_LEVEL);
+      Print("# --- detected broker profile (parse with research/broker_profile.py) ---");
+      PrintFormat("symbol=%s", m_sym.Name());
+      PrintFormat("contract_size=%.4f", m_sym.ContractSize());
+      PrintFormat("min_lot=%.4f", m_sym.LotsMin());
+      PrintFormat("lot_step=%.4f", m_sym.LotsStep());
+      PrintFormat("max_lot=%.4f", m_sym.LotsMax());
+      PrintFormat("tick_size=%.8f", m_sym.TickSize());
+      PrintFormat("tick_value=%.8f", m_tick_value);
+      PrintFormat("point=%.8f", m_point);
+      PrintFormat("digits=%d", m_digits);
+      PrintFormat("spread_points=%.1f", spread_pts);
+      PrintFormat("stops_level_points=%.0f", stops_lvl);
+      PrintFormat("commission_per_lot=%.6f", EstimateCommissionPerLot());
+      PrintFormat("account_equity=%.2f", AccountInfoDouble(ACCOUNT_EQUITY));
+      PrintFormat("account_currency=%s", AccountInfoString(ACCOUNT_CURRENCY));
+      Print("# spread_points is the CURRENT spread; sample it across sessions for a real cost figure.");
+   }
+
    //--- Normalise a raw lot to the broker's step/min/max for this symbol
    double            NormalizeLots(const double lots) const
    {

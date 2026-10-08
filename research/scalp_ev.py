@@ -113,7 +113,17 @@ def main() -> int:
     ap.add_argument("--paths", type=int, default=5000)
     ap.add_argument("--table", action="store_true")
     ap.add_argument("--sim", action="store_true")
+    ap.add_argument("--broker", metavar="FILE",
+                    help="MT5 key=value spec file; overrides --spread with the detected cost")
     args = ap.parse_args()
+
+    if args.broker:
+        from broker_profile import BrokerProfile
+        bp = BrokerProfile.from_mt5_kv(open(args.broker).read())
+        print(bp.summary())
+        args.spread = bp.round_trip_cost_price
+        args.oz_per_lot = bp.contract_size
+        print(f"using detected round-trip cost = {args.spread:.4f} price\n")
 
     if args.table:
         print("Break-even win rate after spread (higher = harder)")

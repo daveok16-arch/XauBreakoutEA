@@ -118,6 +118,7 @@ int OnInit(void)
 
    PrintFormat("XauBreakoutEA init on %s, digits=%d, point=%.5f, tickvalue=%.5f",
                _Symbol, sym.Digits(), sym.Point(), sym.TickValue());
+   risk.PrintBrokerProfile();   // self-detected spec; broker-agnostic, parseable
    return(INIT_SUCCEEDED);
 }
 
