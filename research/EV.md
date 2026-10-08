@@ -336,6 +336,51 @@ and the scalp bots have and what our swing design deliberately does not. That is
 the real, honest difference between the mechanisms - and it validates the user's
 observation rather than dismissing it.
 
+## Can a fast scalper grow $12 to $5,000? (the mechanism, quantified)
+
+Ran the tiered-scalp mechanism through the same $12 -> $5,000 harness at Gold
+Reaper's frequency (3168 trades ~ 7 years at 1.24 closes/day), on a 10 oz micro
+account. Two things must BOTH be true: a positive edge, and tiering that actually
+scales with equity.
+
+First, with conservative tiers (lot stays 0.01 until $30), P(reach) = 0% even at
+a strong edge - most trades are spent at the minimum lot and 3168 trades is not
+enough. So frequency alone is not the engine; the tiering has to compound.
+
+With equity-scaled tiers (lot ~ equity * f, discretised), 3168 trades, spread 0.3:
+
+```
+f=0.02 (small steps)                    f=0.05                       f=0.10 (aggressive)
+win   edge   P(reach) P(ruin)           win   edge   P(reach) P(ruin)   win   edge   P(reach) P(ruin)
+0.85 +0.050    0.0%    0.0%             0.85 +0.050   51.4%    0.0%     0.85 +0.050   98.2%    1.7%
+0.90 +0.100    0.0%    0.0%             0.90 +0.100  100.0%    0.0%     0.90 +0.100  100.0%    0.0%
+(TP0.5/SL0.5, p* = 80%)  ->  need win >~ 80% and enough size growth
+```
+
+The pattern across every TP/SL tested:
+
+1. Below break-even p*: ruin ~100%. The mechanism is dead no matter the sizing.
+2. Exactly at p*: ruin 17-90% depending on f. Tiered sizing alone does not save a
+   zero-edge scalper.
+3. Just above p*: edge is so small that ruin stays high (24-50%) - the tail wins.
+4. Comfortably above p* (edge >= ~0.075-0.10 price units): P(reach) 87-100%,
+   P(ruin) ~0-4%. The mechanism works and reaches $5,000 in 500-2,900 trades.
+
+Concretely, to turn $12 into $5,000 in ~7 years the scalper needs BOTH:
+
+- a real per-trade edge after the broker's spread - win rate clearing p* with
+  margin (e.g. TP 0.5 / SL 1.0 needs ~92%+ win; TP 1.0 / SL 0.5 needs ~58-63%);
+- tiered sizing that scales with equity, not a fixed minimum lot. With f=0.05-0.10
+  it reaches the target; with f=0.02 and a small edge it does not.
+
+So the user's observation is correct and now quantified: the mechanism CAN grow
+$12 fast, but only when the edge clears break-even by a margin AND the lot tiers
+compound. Higher f shortens the calendar (f=0.10 reaches in ~500-1,000 trades vs
+~2,000-2,900 at f=0.05) at the cost of a slightly higher ruin rate. This is not
+martingale: every tier steps up with EQUITY. The open question is empirical, not
+mathematical - does a real XAUUSD scalp clear p* after the actual broker spread?
+That is what the broker detection and a real trade list are for.
+
 ## Next step, in order
 
 1. Confirm the long-only daily result survives costs and the OOS/regime gate on

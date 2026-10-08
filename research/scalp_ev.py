@@ -53,11 +53,13 @@ def edge_per_trade(tp: float, sl: float, spread: float, win: float) -> float:
 
 def simulate(start: float, tiers: list[tuple[float, float]], tp: float, sl: float,
              spread: float, win: float, oz_per_lot: float, trades_per_day: int,
-             days: int, paths: int, seed: int = 7, ruin_frac: float = 0.5) -> dict:
+             days: int, paths: int, seed: int = 7, ruin_frac: float = 0.5,
+             target: float | None = None) -> dict:
     """Compounding scalper with balance-tiered lots, spread on every trade.
 
     tiers: list of (balance_threshold, lot_size) ascending. Lot is the largest
     tier whose threshold <= equity. Ruin = equity falls below ruin_frac * start.
+    If `target` is given, also reports P(reach target) and median trades to it.
     """
     rng = np.random.default_rng(seed)
     thresholds = np.array([t[0] for t in tiers], float)
@@ -68,6 +70,7 @@ def simulate(start: float, tiers: list[tuple[float, float]], tp: float, sl: floa
     max_dd = np.zeros(paths)
     ruin = np.zeros(paths, bool)
     ruin_at = np.full(paths, -1, dtype=np.int64)
+    reach_at = np.full(paths, -1, dtype=np.int64)
     floor = ruin_frac * start
 
     for k in range(1, n_trades + 1):
@@ -87,17 +90,26 @@ def simulate(start: float, tiers: list[tuple[float, float]], tp: float, sl: floa
         peak[idx] = np.maximum(peak[idx], eq[idx])
         dd = (peak[idx] - eq[idx]) / np.maximum(peak[idx], 1e-9)
         max_dd[idx] = np.maximum(max_dd[idx], dd)
+        if target is not None:
+            just = idx[(eq[idx] >= target) & (reach_at[idx] < 0)]
+            reach_at[just] = k
         newly = idx[eq[idx] <= floor]
         ruin[newly] = True
         ruin_at[newly] = k
 
-    return {
+    out = {
         "final_median": float(np.median(eq)),
         "final_p10": float(np.percentile(eq, 10)),
         "final_p90": float(np.percentile(eq, 90)),
         "P_ruin": float(ruin.mean()),
         "median_max_dd": float(np.median(max_dd) * 100),
     }
+    if target is not None:
+        reached = reach_at >= 0
+        out["P_reach"] = float(reached.mean())
+        out["median_trades_to_target"] = (
+            float(np.median(reach_at[reached])) if reached.any() else float("nan"))
+    return out
 
 
 def main() -> int:

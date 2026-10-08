@@ -55,6 +55,18 @@ class TestSimulate(unittest.TestCase):
         b = scalp_ev.simulate(10.0, self.tiers, 0.5, 1.0, 0.2, 0.85, 1.0, 50, 250, 500, seed=1)
         self.assertEqual(a, b)
 
+    def test_target_reported(self):
+        s = scalp_ev.simulate(10.0, self.tiers, 0.5, 1.0, 0.2, 0.85, 1.0, 50, 250, 2000,
+                              target=100.0)
+        self.assertIn("P_reach", s)
+        self.assertIn("median_trades_to_target", s)
+        self.assertGreaterEqual(s["P_reach"], 0.0)
+        self.assertLessEqual(s["P_reach"], 1.0)
+
+    def test_target_not_given_still_works(self):
+        s = scalp_ev.simulate(10.0, self.tiers, 0.5, 1.0, 0.2, 0.85, 1.0, 50, 250, 2000)
+        self.assertNotIn("P_reach", s)
+
 
 if __name__ == "__main__":
     unittest.main()
