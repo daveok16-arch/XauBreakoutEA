@@ -242,6 +242,45 @@ Applied when a candidate's trades are available (any of the above mechanisms):
 
 Until a candidate clears all five, its curve - however good - is not evidence.
 
+## Why long-only (not symmetric)
+
+Same breakout mechanism, run both ways on 26.1 years of daily gold:
+
+```
+              n     expectancy    win%    PF     maxDD
+LONG        196       +0.357R      51%    1.84     8.2%
+SHORT        71       -0.084R      34%     -        -
+BOTH        267       +0.240R      ~46%   1.53    12.5%
+```
+
+Adding the short side LOWERS expectancy (0.357 -> 0.240), LOWERS profit factor
+(1.84 -> 1.53) and RAISES drawdown (8.2% -> 12.5%). On risk-adjusted terms,
+dropping shorts strictly dominates keeping them. That is the whole reason for
+one direction: it is a measured result, not a preference.
+
+Why the short side fails, mechanically:
+
+1. Drift. Gold compounded +11.0%/yr over the window (274 -> 4162). Up-days and
+   down-days are near-symmetric in size (+0.80% vs -0.81%), but the drift is
+   persistent - so a long breakout rides a tailwind and a short breakout fights
+   one.
+2. Asymmetry of the instrument. Gold tends to take the stairs up (persistent
+   monetary-debasement bid) and the elevator down (sharp fear spikes that
+   reverse). A breakout system needs moves to CONTINUE; up-moves persist,
+   down-spikes mean-revert, so short breakouts get stopped. Short win rate 34%
+   vs long 51% is that failure rate showing up.
+3. The short side is thin (n=71) and NOT significantly negative (t ~ -0.57), so
+   the honest statement is "not proven to have an edge", not "proven to lose".
+   The case for dropping it is risk-adjusted (it dilutes and adds drawdown),
+   which holds regardless of the t-stat.
+
+Caveat: gold 2000-2026 was a secular bull, so part of the long-only advantage is
+regime. But the long side was positive in EVERY chronological chunk (t=3.66),
+including the 2011-2015 bear, so it is not just the bull years carrying it.
+
+The implication: we do not imitate Gold Reaper, and we are not symmetric. We
+trade the one direction where this mechanism has a demonstrated edge.
+
 ## Next step, in order
 
 1. Confirm the long-only daily result survives costs and the OOS/regime gate on
