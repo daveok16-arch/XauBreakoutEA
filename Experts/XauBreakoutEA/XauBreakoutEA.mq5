@@ -174,7 +174,7 @@ void ManageTrailing(const double atr)
       if((ulong)PositionGetInteger(POSITION_MAGIC) != InpMagic) continue;
 
       double open   = PositionGetDouble(POSITION_PRICE_OPEN);
-      double sl     = PositionGetDouble(POSITION_STOPLOSS);
+      double sl     = PositionGetDouble(POSITION_SL);
       double tp     = PositionGetDouble(POSITION_TP);
       long   type   = PositionGetInteger(POSITION_TYPE);
       double point  = sym.Point();
@@ -266,7 +266,9 @@ void OnTick(void)
       double sl    = NormalizeDouble(entry - InpStopAtrMult * atr, sym.Digits());
       double tp    = NormalizeDouble(entry + InpRewardRisk * InpStopAtrMult * atr, sym.Digits());
       if(trade.Buy(lots, _Symbol, 0.0, sl, tp, "XauBreakout"))
-         g_pending_request = trade.Result().request_id;
+         MqlTradeResult trade_result;
+         trade.Result(trade_result);
+         g_pending_request = trade_result.request_id;
       else
          Print("XauBreakoutEA entry rejected: ", trade.ResultRetcodeDescription());
    }
@@ -276,7 +278,9 @@ void OnTick(void)
       double sl    = NormalizeDouble(entry + InpStopAtrMult * atr, sym.Digits());
       double tp    = NormalizeDouble(entry - InpRewardRisk * InpStopAtrMult * atr, sym.Digits());
       if(trade.Sell(lots, _Symbol, 0.0, sl, tp, "XauBreakout"))
-         g_pending_request = trade.Result().request_id;
+         MqlTradeResult trade_result;
+         trade.Result(trade_result);
+         g_pending_request = trade_result.request_id;
       else
          Print("XauBreakoutEA entry rejected: ", trade.ResultRetcodeDescription());
    }
