@@ -265,10 +265,12 @@ void OnTick(void)
       double entry = NormalizeDouble(sym.Ask() + buffer_pts * sym.Point(), sym.Digits());
       double sl    = NormalizeDouble(entry - InpStopAtrMult * atr, sym.Digits());
       double tp    = NormalizeDouble(entry + InpRewardRisk * InpStopAtrMult * atr, sym.Digits());
+      MqlTradeResult trade_result;
       if(trade.Buy(lots, _Symbol, 0.0, sl, tp, "XauBreakout"))
-         MqlTradeResult trade_result;
+      {
          trade.Result(trade_result);
          g_pending_request = trade_result.request_id;
+      }
       else
          Print("XauBreakoutEA entry rejected: ", trade.ResultRetcodeDescription());
    }
@@ -277,10 +279,12 @@ void OnTick(void)
       double entry = NormalizeDouble(sym.Bid() - buffer_pts * sym.Point(), sym.Digits());
       double sl    = NormalizeDouble(entry + InpStopAtrMult * atr, sym.Digits());
       double tp    = NormalizeDouble(entry - InpRewardRisk * InpStopAtrMult * atr, sym.Digits());
+      MqlTradeResult trade_result;
       if(trade.Sell(lots, _Symbol, 0.0, sl, tp, "XauBreakout"))
-         MqlTradeResult trade_result;
+      {
          trade.Result(trade_result);
          g_pending_request = trade_result.request_id;
+      }
       else
          Print("XauBreakoutEA entry rejected: ", trade.ResultRetcodeDescription());
    }
