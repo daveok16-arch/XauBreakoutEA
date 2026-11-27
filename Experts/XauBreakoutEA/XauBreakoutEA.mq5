@@ -217,13 +217,30 @@ void OnTick(void)
 
    //--- account guards
    if(risk.DailyLossBreached((long)InpMagic, InpMaxDailyLossPct))
+   {
+      Print("XauBreakoutEA: entry blocked by daily loss limit");
       return;
+   }
    if(risk.CountPositions((long)InpMagic) >= InpMaxPositions)
+   {
+      Print("XauBreakoutEA: entry blocked by maximum position limit");
       return;
-   if(!SessionOk() || !SpreadOk())
+   }
+   if(!SessionOk())
+   {
+      Print("XauBreakoutEA: entry blocked by trading session filter (server time)");
       return;
+   }
+   if(!SpreadOk())
+   {
+      Print("XauBreakoutEA: entry blocked by maximum spread filter");
+      return;
+   }
    if(InpUseNewsFilter && news.IsBlocked())
+   {
+      Print("XauBreakoutEA: entry blocked by high-impact news filter");
       return;
+   }
 
    //--- Donchian channel from bars *before* the breakout bar (shift 2),
    //    so the channel never includes the bar whose close we test.
@@ -241,6 +258,13 @@ void OnTick(void)
    bool short_ok = InpRequireCloseOut ? (close1 < lo)
                                       : (iLow(_Symbol, PERIOD_CURRENT, 1) < lo);
 
+   if(!long_ok && !short_ok)
+   {
+      PrintFormat("XauBreakoutEA: no breakout on completed bar; close=%.2f, upper=%.2f, lower=%.2f",
+                  close1, hi, lo);
+      return;
+   }
+
    //--- risk budget check (only if a cap is set)
    double use_risk = InpRiskPercent;
    if(InpMaxTotalRiskPct > 0.0)
@@ -249,12 +273,18 @@ void OnTick(void)
       use_risk = MathMin(InpRiskPercent, budget_pct);
    }
    if(use_risk <= 0.0)
+   {
+      Print("XauBreakoutEA: entry blocked because no risk budget remains");
       return;
+   }
 
    double stop_pts = (InpStopAtrMult * atr) / sym.Point();
    double lots     = risk.LotsForRisk(use_risk, stop_pts);
    if(lots <= 0.0)
+   {
+      Print("XauBreakoutEA: calculated safe lot size is below broker minimum; trade skipped to protect risk limit");
       return;
+   }
 
    double buffer_pts = (InpRandomSpread > 0)
                        ? (double)(MathRand() % (InpRandomSpread + 1))
