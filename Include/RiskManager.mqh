@@ -113,10 +113,15 @@ public:
       double maxl = m_sym.LotsMax();
       if(step <= 0.0)
          step = 0.01;
-      double v = MathFloor(lots / step + 0.5) * step;
-      if(v < minl) v = minl;
-      if(v > maxl) v = maxl;
-      return(NormalizeDouble(v, 2));
+      // Never round up to the broker minimum: doing so can exceed the
+      // requested account-risk percentage. If the safe size is too small,
+      // skip the trade instead.
+      double v = MathFloor(lots / step + 1e-10) * step;
+      if(v < minl)
+         return(0.0);
+      if(v > maxl)
+         v = maxl;
+      return(NormalizeDouble(v, 8));
    }
 
    //+---------------------------------------------------------------+
